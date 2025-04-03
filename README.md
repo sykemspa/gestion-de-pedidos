@@ -98,12 +98,12 @@
 
     <script>
         const firebaseConfig = {
-            apiKey: "TU_API_KEY",
-            authDomain: "TU_AUTH_DOMAIN",
-            projectId: "TU_PROJECT_ID",
-            storageBucket: "TU_STORAGE_BUCKET",
-            messagingSenderId: "TU_MESSAGING_SENDER_ID",
-            appId: "TU_APP_ID"
+            apiKey: "SYKEM",
+            authDomain: "toma-pedidos.firebaseapp.com",
+            projectId: "toma-pedidos",
+            storageBucket: "toma-pedidos.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef123456"
         };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
