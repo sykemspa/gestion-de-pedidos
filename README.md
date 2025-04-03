@@ -1,4 +1,3 @@
-# gestion-de-pedidos
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Pedidos</title>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <style>
         body {
@@ -49,13 +49,6 @@
             display: flex;
             flex-wrap: wrap;
         }
-        .calendar-week {
-            width: 100%;
-            padding: 10px;
-            background-color: #ccc;
-            margin-top: 20px;
-            border-radius: 5px;
-        }
         .calendar-day {
             flex: 1;
             min-width: 120px;
@@ -78,7 +71,15 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="authContainer">
+        <h2>Iniciar Sesión</h2>
+        <input type="email" id="email" placeholder="Correo electrónico">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="login()">Iniciar Sesión</button>
+        <p>¿No tienes cuenta? <a href="#" onclick="showSignUp()">Regístrate</a></p>
+    </div>
+    
+    <div class="container" id="appContainer" style="display:none;">
         <h2>Gestión de Pedidos</h2>
         <h3>Nuevo Pedido</h3>
         <input type="text" id="cliente" placeholder="Nombre del Cliente">
@@ -92,6 +93,7 @@
         <h3>Pedidos Registrados</h3>
         <div id="listaPedidos"></div>
     </div>
+    
     <div class="calendar" id="calendario"></div>
 
     <script>
@@ -104,13 +106,42 @@
             appId: "TU_APP_ID"
         };
         firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
         const db = firebase.firestore();
+
+        // Iniciar sesión
+        function login() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            auth.signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    document.getElementById("authContainer").style.display = "none";
+                    document.getElementById("appContainer").style.display = "block";
+                    actualizarCalendario();
+                })
+                .catch((error) => {
+                    alert(error.message);
+                });
+        }
+
+        // Mostrar formulario de registro
+        function showSignUp() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(() => {
+                    alert("Cuenta creada con éxito.");
+                })
+                .catch((error) => {
+                    alert(error.message);
+                });
+        }
 
         // Inicializar fecha de pedido al día actual
         document.getElementById("fechaPedido").value = new Date().toISOString().split("T")[0];
 
         // Agregar evento al botón "Agregar Pedido"
-        document.getElementById("btnAgregarPedido").addEventListener("click", agregarPedido);
+        document.getElementById("btnAgregarPedido").onclick = agregarPedido;
 
         function calcularSaldo() {
             let montoTotal = parseFloat(document.getElementById("montoTotal").value) || 0;
@@ -140,13 +171,16 @@
                 abono: abono,
                 saldo: saldo,
                 diaEntrega: diaEntrega,
-                estado: saldo > 0 ? "Pendiente" : "Entregado"
+                estado: saldo > 0 ? "Pendiente" : "Entregado",
+                usuarioId: auth.currentUser.uid // Asociar el pedido con el usuario logueado
             };
 
             // Guardar el pedido en Firestore
             db.collection("pedidos").add(pedido).then(() => {
                 actualizarCalendario();
                 limpiarCampos();
+            }).catch((error) => {
+                alert("Error al agregar el pedido: " + error.message);
             });
         }
 
@@ -160,7 +194,7 @@
         }
 
         function actualizarCalendario() {
-            db.collection("pedidos").get().then((querySnapshot) => {
+            db.collection("pedidos").where("usuarioId", "==", auth.currentUser.uid).get().then((querySnapshot) => {
                 let calendario = document.getElementById("calendario");
                 calendario.innerHTML = ""; // Limpiar calendario antes de mostrar
 
@@ -196,11 +230,22 @@
 
                     calendario.appendChild(div);
                 }
+            }).catch((error) => {
+                alert("Error al cargar los pedidos: " + error.message);
             });
         }
 
-        // Cargar los pedidos al iniciar la página
-        actualizarCalendario();
+        // Cargar los pedidos al iniciar la página si ya estás logueado
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById("authContainer").style.display = "none";
+                document.getElementById("appContainer").style.display = "block";
+                actualizarCalendario();
+            } else {
+                document.getElementById("authContainer").style.display = "block";
+                document.getElementById("appContainer").style.display = "none";
+            }
+        });
     </script>
 </body>
 </html>
