@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Pedidos</title>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <style>
         body {
@@ -71,15 +70,7 @@
     </style>
 </head>
 <body>
-    <div class="container" id="authContainer">
-        <h2>Iniciar Sesión</h2>
-        <input type="email" id="email" placeholder="Correo electrónico">
-        <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="login()">Iniciar Sesión</button>
-        <p>¿No tienes cuenta? <a href="#" onclick="showSignUp()">Regístrate</a></p>
-    </div>
-    
-    <div class="container" id="appContainer" style="display:none;">
+    <div class="container">
         <h2>Gestión de Pedidos</h2>
         <h3>Nuevo Pedido</h3>
         <input type="text" id="cliente" placeholder="Nombre del Cliente">
@@ -89,13 +80,11 @@
         <input type="number" id="abono" placeholder="Abono" oninput="calcularSaldo()">
         <input type="number" id="saldo" placeholder="Saldo" readonly>
         <input type="date" id="diaEntrega">
-        <button id="btnAgregarPedido">Agregar Pedido</button>
+        <button onclick="agregarPedido()">Agregar Pedido</button>
         <h3>Pedidos Registrados</h3>
         <div id="listaPedidos"></div>
     </div>
-    
     <div class="calendar" id="calendario"></div>
-
     <script>
         const firebaseConfig = {
             apiKey: "TU_API_KEY",
@@ -106,42 +95,10 @@
             appId: "TU_APP_ID"
         };
         firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
         const db = firebase.firestore();
-
-        // Iniciar sesión
-        function login() {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-            auth.signInWithEmailAndPassword(email, password)
-                .then(() => {
-                    document.getElementById("authContainer").style.display = "none";
-                    document.getElementById("appContainer").style.display = "block";
-                    actualizarCalendario();
-                })
-                .catch((error) => {
-                    alert(error.message);
-                });
-        }
-
-        // Mostrar formulario de registro
-        function showSignUp() {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-            auth.createUserWithEmailAndPassword(email, password)
-                .then(() => {
-                    alert("Cuenta creada con éxito.");
-                })
-                .catch((error) => {
-                    alert(error.message);
-                });
-        }
 
         // Inicializar fecha de pedido al día actual
         document.getElementById("fechaPedido").value = new Date().toISOString().split("T")[0];
-
-        // Agregar evento al botón "Agregar Pedido"
-        document.getElementById("btnAgregarPedido").onclick = agregarPedido;
 
         function calcularSaldo() {
             let montoTotal = parseFloat(document.getElementById("montoTotal").value) || 0;
@@ -171,16 +128,14 @@
                 abono: abono,
                 saldo: saldo,
                 diaEntrega: diaEntrega,
-                estado: saldo > 0 ? "Pendiente" : "Entregado",
-                usuarioId: auth.currentUser.uid // Asociar el pedido con el usuario logueado
+                estado: saldo > 0 ? "Pendiente" : "Entregado"
             };
 
             // Guardar el pedido en Firestore
             db.collection("pedidos").add(pedido).then(() => {
                 actualizarCalendario();
+                // Limpiar los campos después de agregar el pedido
                 limpiarCampos();
-            }).catch((error) => {
-                alert("Error al agregar el pedido: " + error.message);
             });
         }
 
@@ -194,58 +149,41 @@
         }
 
         function actualizarCalendario() {
-            db.collection("pedidos").where("usuarioId", "==", auth.currentUser.uid).get().then((querySnapshot) => {
+            db.collection("pedidos").onSnapshot((querySnapshot) => {
                 let calendario = document.getElementById("calendario");
-                calendario.innerHTML = ""; // Limpiar calendario antes de mostrar
-
-                // Crear un objeto con las fechas y pedidos
-                let pedidosPorDia = {};
+                calendario.innerHTML = "";
+                let fechas = {};
 
                 querySnapshot.forEach((doc) => {
                     let pedido = doc.data();
-                    let fechaEntrega = pedido.diaEntrega;
-                    if (!pedidosPorDia[fechaEntrega]) {
-                        pedidosPorDia[fechaEntrega] = [];
+                    let fecha = pedido.diaEntrega;
+                    if (!fechas[fecha]) {
+                        fechas[fecha] = [];
                     }
-                    pedidosPorDia[fechaEntrega].push(pedido);
+                    fechas[fecha].push({
+                        cliente: pedido.cliente,
+                        descripcion: pedido.descripcion,
+                        estado: pedido.estado
+                    });
                 });
 
-                // Mostrar los pedidos en el calendario
                 let hoy = new Date();
-                let fechaBase = hoy.getDate(); // Día de inicio
                 for (let i = 0; i < 14; i++) {
                     let dia = new Date(hoy);
-                    dia.setDate(fechaBase + i);
+                    dia.setDate(hoy.getDate() + i);
                     let fechaStr = dia.toISOString().split("T")[0];
                     let div = document.createElement("div");
-                    div.classList.add("calendar-day");
-
-                    if (pedidosPorDia[fechaStr]) {
-                        div.classList.add(pedidosPorDia[fechaStr][0].estado === "Pendiente" ? "pendiente" : "entregado");
-                        div.innerHTML = `<strong>${fechaStr}</strong><br>${pedidosPorDia[fechaStr].map(p => `${p.cliente}: ${p.descripcion}`).join("<br>")}`;
-                    } else {
-                        div.classList.add("sin-pedido");
-                        div.innerHTML = `<strong>${fechaStr}</strong><br>Sin pedidos`;
-                    }
-
+                    div.className = "calendar-day";
+                    let estado = fechas[fechaStr] ? fechas[fechaStr][0].estado : "Sin pedido";
+                    div.classList.add(estado === "Pendiente" ? "pendiente" : estado === "Entregado" ? "entregado" : "sin-pedido");
+                    div.innerHTML = `<strong>${fechaStr}</strong><br>${fechas[fechaStr] ? fechas[fechaStr].map(p => `${p.cliente}: ${p.descripcion}`).join("<br>") : "Sin pedidos"}`;
                     calendario.appendChild(div);
                 }
-            }).catch((error) => {
-                alert("Error al cargar los pedidos: " + error.message);
             });
         }
 
-        // Cargar los pedidos al iniciar la página si ya estás logueado
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                document.getElementById("authContainer").style.display = "none";
-                document.getElementById("appContainer").style.display = "block";
-                actualizarCalendario();
-            } else {
-                document.getElementById("authContainer").style.display = "block";
-                document.getElementById("appContainer").style.display = "none";
-            }
-        });
+        // Cargar los pedidos al iniciar la página
+        actualizarCalendario();
     </script>
 </body>
 </html>
